@@ -59,6 +59,9 @@ indexmap = "2"
 # Dev dependencies
 pretty_assertions = "1"
 insta = { version = "1", features = ["yaml"] }
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
