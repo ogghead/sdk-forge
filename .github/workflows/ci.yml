@@ -11,8 +11,6 @@ permissions:
 jobs:
   lint:
     name: Fmt / Clippy / Machete
-    # Skip on the template repo — template-test.yml handles validation there.
-    if: github.repository != 'ogghead/rust-starter'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

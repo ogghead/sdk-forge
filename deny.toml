@@ -9,8 +9,8 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
+    "OpenSSL",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
 ]
 confidence-threshold = 0.8
 
@@ -26,6 +26,5 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = [
     "https://github.com/rust-lang/crates.io-index",
-    "sparse+https://index.crates.io/",
 ]
 allow-git = []
