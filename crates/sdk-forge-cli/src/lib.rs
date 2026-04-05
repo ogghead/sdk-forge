@@ -105,12 +105,13 @@ mod tests {
             session: PathBuf::from("test.sdkforge"),
             output: PathBuf::from("output"),
             name: None,
+            http_client: "reqwest".to_owned(),
             check: false,
         });
         let result = dispatch(&cmd);
         assert!(
             result.is_err(),
-            "generate should return not-implemented error"
+            "generate should fail on nonexistent session file"
         );
     }
 

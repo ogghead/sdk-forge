@@ -1,0 +1,22 @@
+//! Error types for the generated SDK.
+
+/// Errors returned by API operations.
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    /// HTTP transport error.
+    #[error("HTTP error: {0}")]
+    Http({{ http_client_crate }}::Error),
+
+    /// API returned a non-success status code.
+    #[error("API error (HTTP {status}): {body}")]
+    Api {
+        /// HTTP status code.
+        status: {{ http_client_crate }}::StatusCode,
+        /// Response body text.
+        body: String,
+    },
+
+    /// Failed to deserialize the response body.
+    #[error("deserialization error: {0}")]
+    Deserialize({{ http_client_crate }}::Error),
+}

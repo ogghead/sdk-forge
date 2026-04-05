@@ -29,7 +29,7 @@ insta = { workspace = true }
 pretty_assertions = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["sdk-forge-analyzer", "sdk-forge-codegen", "sdk-forge-recorder", "sdk-forge-session", "tokio"]
+ignored = ["sdk-forge-analyzer", "sdk-forge-recorder", "tokio"]
 
 [lints]
 workspace = true

@@ -1,0 +1,122 @@
+//! API client and authentication.
+
+use crate::error::ApiError;
+
+/// Authentication strategy for API requests.
+///
+/// Implement this trait to customize how credentials are attached to requests.
+/// A default implementation is provided for the detected auth pattern.
+pub trait AuthStrategy: Send + Sync {
+    /// Apply authentication to an outgoing request.
+    fn apply(&self, req: {{ http_client_crate }}::RequestBuilder) -> {{ http_client_crate }}::RequestBuilder;
+}
+
+/// No authentication.
+pub struct NoAuth;
+
+impl AuthStrategy for NoAuth {
+    fn apply(&self, req: {{ http_client_crate }}::RequestBuilder) -> {{ http_client_crate }}::RequestBuilder {
+        req
+    }
+}
+{% if auth %}
+
+/// {{ auth.description }}.
+pub struct {{ auth.struct_name }} {
+{% for field in auth.fields %}
+    /// {{ field.doc_comment }}
+    pub {{ field.name }}: {{ field.rust_type }},
+{% endfor %}
+}
+
+impl {{ auth.struct_name }} {
+    /// Create a new instance.
+    pub fn new({% for field in auth.fields %}{{ field.name }}: impl Into<{{ field.rust_type }}>{% if not loop.last %}, {% endif %}{% endfor %}) -> Self {
+        Self {
+{% for field in auth.fields %}
+            {{ field.name }}: {{ field.name }}.into(),
+{% endfor %}
+        }
+    }
+}
+
+impl AuthStrategy for {{ auth.struct_name }} {
+    fn apply(&self, req: {{ http_client_crate }}::RequestBuilder) -> {{ http_client_crate }}::RequestBuilder {
+{% if auth.variant == "bearer" %}
+        req.header("Authorization", format!("Bearer {}", self.token))
+{% elif auth.variant == "api_key" and auth.location == "header" %}
+        req.header("{{ auth.credential_name }}", &self.key)
+{% elif auth.variant == "api_key" and auth.location == "query" %}
+        req.query(&[("{{ auth.credential_name }}", &self.key)])
+{% elif auth.variant == "cookie" %}
+        req.header("Cookie", format!("{{ auth.credential_name }}={}", self.value))
+{% elif auth.variant == "basic" %}
+        req.basic_auth(&self.username, Some(&self.password))
+{% endif %}
+    }
+}
+{% endif %}
+
+/// API client for {{ base_url }}.
+///
+/// # Examples
+///
+/// ```ignore
+{% if auth %}
+/// let client = ApiClient::new({{ auth.struct_name }}::new("your-credential"));
+{% else %}
+/// let client = ApiClient::new(NoAuth);
+{% endif %}
+/// ```
+pub struct ApiClient {
+    base_url: String,
+    http: {{ http_client_crate }}::Client,
+    auth: Box<dyn AuthStrategy>,
+}
+
+impl ApiClient {
+    /// Create a new client with the given auth strategy.
+    pub fn new(auth: impl AuthStrategy + 'static) -> Self {
+        Self {
+            base_url: "{{ base_url }}".to_string(),
+            http: {{ http_client_crate }}::Client::new(),
+            auth: Box::new(auth),
+        }
+    }
+
+    /// Create a new client with a custom HTTP client instance.
+    ///
+    /// Use this to configure timeouts, proxies, TLS settings, or
+    /// browser impersonation (with rquest).
+    pub fn with_http_client(
+        http: {{ http_client_crate }}::Client,
+        auth: impl AuthStrategy + 'static,
+    ) -> Self {
+        Self {
+            base_url: "{{ base_url }}".to_string(),
+            http,
+            auth: Box::new(auth),
+        }
+    }
+
+    /// Override the base URL.
+    pub fn with_base_url(mut self, url: impl Into<String>) -> Self {
+        self.base_url = url.into();
+        self
+    }
+
+    /// Send a request and return the response, applying auth.
+    pub(crate) async fn send(
+        &self,
+        req: {{ http_client_crate }}::RequestBuilder,
+    ) -> Result<{{ http_client_crate }}::Response, ApiError> {
+        let req = self.auth.apply(req);
+        let resp = req.send().await.map_err(ApiError::Http)?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(ApiError::Api { status, body });
+        }
+        Ok(resp)
+    }
+}

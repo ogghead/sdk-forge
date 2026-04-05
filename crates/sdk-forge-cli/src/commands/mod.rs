@@ -62,6 +62,9 @@ pub struct GenerateArgs {
     /// Name for the generated SDK crate.
     #[arg(short, long)]
     pub name: Option<String>,
+    /// HTTP client crate for the generated SDK (`reqwest` or `rquest`).
+    #[arg(long, default_value = "reqwest")]
+    pub http_client: String,
     /// Run `cargo check` on the generated crate.
     #[arg(long)]
     pub check: bool,

@@ -1,0 +1,17 @@
+//! Request and response types.
+
+use serde::{Deserialize, Serialize};
+{% for struct in structs %}
+
+/// {{ struct.doc_comment }}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct {{ struct.name }} {
+{% for field in struct.fields %}
+{% if field.serde_rename %}    #[serde(rename = "{{ field.serde_rename }}")]
+{% endif %}
+{% if field.is_optional %}    #[serde(skip_serializing_if = "Option::is_none")]
+{% endif %}
+    pub {{ field.name }}: {{ field.rust_type }},
+{% endfor %}
+}
+{% endfor %}
