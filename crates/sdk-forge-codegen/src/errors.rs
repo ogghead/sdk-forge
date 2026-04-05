@@ -1,15 +1,13 @@
 //! SDK error enum generation context.
 //!
 //! Builds the template context for the generated `error.rs` file.
-//! The error module is mostly static — the only variable is the
-//! HTTP client crate name (`reqwest` or `rquest`).
 
 use serde::Serialize;
 
 /// Context for rendering `error.rs.tera`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorContext {
-    /// HTTP client crate name (e.g. `"reqwest"` or `"rquest"`).
+    /// HTTP client crate name (`"rquest"`).
     pub http_client_crate: String,
 }
 
@@ -25,13 +23,7 @@ mod tests {
     use super::build_error_context;
 
     #[test]
-    fn test_default_error_context() {
-        let ctx = build_error_context("reqwest");
-        assert_eq!(ctx.http_client_crate, "reqwest");
-    }
-
-    #[test]
-    fn test_rquest_error_context() {
+    fn test_error_context() {
         let ctx = build_error_context("rquest");
         assert_eq!(ctx.http_client_crate, "rquest");
     }

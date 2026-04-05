@@ -105,7 +105,6 @@ mod tests {
             session: PathBuf::from("test.sdkforge"),
             output: PathBuf::from("output"),
             name: None,
-            http_client: "reqwest".to_owned(),
             check: false,
         });
         let result = dispatch(&cmd);

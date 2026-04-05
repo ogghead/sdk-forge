@@ -12,7 +12,7 @@ use crate::auth::AuthInfo;
 pub struct ClientContext {
     /// Base URL of the API.
     pub base_url: String,
-    /// HTTP client crate name (e.g. `"reqwest"` or `"rquest"`).
+    /// HTTP client crate name (`"rquest"`).
     pub http_client_crate: String,
     /// Auth information, if auth was detected.
     pub auth: Option<AuthInfo>,
@@ -44,7 +44,7 @@ mod tests {
     #[test]
     fn test_client_context_with_auth() {
         let auth = build_auth_info(&Some(sdk_forge_session::types::AuthPattern::BearerToken));
-        let ctx = build_client_context("https://api.example.com", "reqwest", auth);
+        let ctx = build_client_context("https://api.example.com", "rquest", auth);
 
         assert!(ctx.has_auth, "should have auth");
         assert!(ctx.auth.is_some());
@@ -53,7 +53,7 @@ mod tests {
 
     #[test]
     fn test_client_context_without_auth() {
-        let ctx = build_client_context("https://api.example.com", "reqwest", None);
+        let ctx = build_client_context("https://api.example.com", "rquest", None);
         assert!(!ctx.has_auth, "should not have auth");
         assert!(ctx.auth.is_none());
     }

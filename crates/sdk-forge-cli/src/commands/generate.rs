@@ -61,7 +61,6 @@ pub fn execute(args: &GenerateArgs) -> miette::Result<()> {
     tracing::info!(
         session = %args.session.display(),
         output = %args.output.display(),
-        http_client = %args.http_client,
         "generating SDK"
     );
 
@@ -81,7 +80,6 @@ pub fn execute(args: &GenerateArgs) -> miette::Result<()> {
     let config = EmitConfig {
         crate_name,
         output_dir: args.output.clone(),
-        http_client: args.http_client.clone(),
         templates_dir,
     };
 

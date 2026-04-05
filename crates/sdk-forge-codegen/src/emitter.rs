@@ -19,6 +19,9 @@ use crate::errors::build_error_context;
 use crate::formatter::format_rust_source;
 use crate::types::resolve_all;
 
+/// HTTP client crate used by generated SDKs.
+const HTTP_CLIENT_CRATE: &str = "rquest";
+
 /// Configuration for the emitter.
 #[derive(Debug, Clone)]
 pub struct EmitConfig {
@@ -26,8 +29,6 @@ pub struct EmitConfig {
     pub crate_name: String,
     /// Output directory. The crate is written to `{output_dir}/{crate_name}/`.
     pub output_dir: PathBuf,
-    /// HTTP client crate (`"reqwest"` or `"rquest"`).
-    pub http_client: String,
     /// Path to the Tera templates directory.
     pub templates_dir: PathBuf,
 }
@@ -57,10 +58,10 @@ pub fn emit(model: &ApiModel, config: &EmitConfig) -> Result<EmitOutput, Codegen
 
     // 2. Build template contexts.
     let auth_info = build_auth_info(&model.auth);
-    let client_ctx = build_client_context(&model.base_url, &config.http_client, auth_info);
-    let error_ctx = build_error_context(&config.http_client);
+    let client_ctx = build_client_context(&model.base_url, HTTP_CLIENT_CRATE, auth_info);
+    let error_ctx = build_error_context(HTTP_CLIENT_CRATE);
     let cargo_ctx =
-        build_cargo_toml_context(&config.crate_name, &model.base_url, &config.http_client);
+        build_cargo_toml_context(&config.crate_name, &model.base_url, HTTP_CLIENT_CRATE);
 
     // 3. Load Tera templates.
     let template_glob = config
@@ -312,7 +313,6 @@ mod tests {
         let config = EmitConfig {
             crate_name: "example-api".to_owned(),
             output_dir: temp.clone(),
-            http_client: "reqwest".to_owned(),
             templates_dir: templates_dir(),
         };
 
@@ -355,8 +355,8 @@ mod tests {
             "Cargo.toml should have crate name"
         );
         assert!(
-            cargo_toml.contains("reqwest"),
-            "Cargo.toml should reference reqwest"
+            cargo_toml.contains("rquest"),
+            "Cargo.toml should reference rquest"
         );
 
         // Verify types.rs has struct definitions.
@@ -401,42 +401,6 @@ mod tests {
     }
 
     #[test]
-    fn test_emit_with_rquest() {
-        let model = test_model();
-        let temp = std::env::temp_dir().join("sdk-forge-emit-rquest-test");
-        let _ = std::fs::remove_dir_all(&temp);
-
-        let config = EmitConfig {
-            crate_name: "rquest-api".to_owned(),
-            output_dir: temp.clone(),
-            http_client: "rquest".to_owned(),
-            templates_dir: templates_dir(),
-        };
-
-        let result = emit(&model, &config);
-        assert!(result.is_ok(), "emit with rquest should succeed");
-
-        let crate_dir = temp.join("rquest-api");
-        let cargo_toml = std::fs::read_to_string(crate_dir.join("Cargo.toml")).unwrap();
-        assert!(
-            cargo_toml.contains("rquest"),
-            "Cargo.toml should reference rquest"
-        );
-        assert!(
-            !cargo_toml.contains("reqwest"),
-            "should not contain reqwest when using rquest"
-        );
-
-        let client_src = std::fs::read_to_string(crate_dir.join("src/client.rs")).unwrap();
-        assert!(
-            client_src.contains("rquest::RequestBuilder"),
-            "client should use rquest types"
-        );
-
-        let _ = std::fs::remove_dir_all(&temp);
-    }
-
-    #[test]
     fn test_emit_no_auth_model() {
         let model = ApiModel {
             base_url: "https://public-api.example.com".to_owned(),
@@ -466,7 +430,6 @@ mod tests {
         let config = EmitConfig {
             crate_name: "public-api".to_owned(),
             output_dir: temp.clone(),
-            http_client: "reqwest".to_owned(),
             templates_dir: templates_dir(),
         };
 
@@ -493,7 +456,6 @@ mod tests {
         let config = EmitConfig {
             crate_name: "bad".to_owned(),
             output_dir: PathBuf::from("/tmp/sdk-forge-bad"),
-            http_client: "reqwest".to_owned(),
             templates_dir: PathBuf::from("/nonexistent/templates"),
         };
 

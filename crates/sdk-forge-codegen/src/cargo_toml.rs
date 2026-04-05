@@ -1,8 +1,7 @@
 //! `Cargo.toml` generation for the output SDK crate.
 //!
 //! Produces a complete `Cargo.toml` with the correct dependencies
-//! for the generated SDK. Supports swapping the HTTP client between
-//! `reqwest` and `rquest`.
+//! for the generated SDK, using `rquest` as the HTTP client.
 
 use serde::Serialize;
 
@@ -13,7 +12,7 @@ pub struct CargoTomlContext {
     pub crate_name: String,
     /// Base URL of the API, used in the package description.
     pub base_url: String,
-    /// HTTP client crate name (e.g. `"reqwest"` or `"rquest"`).
+    /// HTTP client crate name (`"rquest"`).
     pub http_client_crate: String,
 }
 
@@ -36,9 +35,9 @@ mod tests {
 
     #[test]
     fn test_cargo_toml_context() {
-        let ctx = build_cargo_toml_context("my-api", "https://api.example.com", "reqwest");
+        let ctx = build_cargo_toml_context("my-api", "https://api.example.com", "rquest");
         assert_eq!(ctx.crate_name, "my-api");
         assert_eq!(ctx.base_url, "https://api.example.com");
-        assert_eq!(ctx.http_client_crate, "reqwest");
+        assert_eq!(ctx.http_client_crate, "rquest");
     }
 }
