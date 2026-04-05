@@ -9,7 +9,9 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+indexmap = { workspace = true }
 miette = { workspace = true }
+openapiv3 = { workspace = true }
 sdk-forge-session = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -21,7 +23,7 @@ tracing = { workspace = true }
 pretty_assertions = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["sdk-forge-session", "serde", "serde_json", "tera", "tracing"]
+ignored = ["sdk-forge-session", "serde", "serde_json", "tera", "tracing", "indexmap"]
 
 [lints]
 workspace = true

@@ -49,6 +49,10 @@ chrono = { version = "0.4", features = ["serde"] }
 # Templating
 tera = "1"
 
+# OpenAPI
+openapiv3 = "2"
+indexmap = "2"
+
 # Dev dependencies
 pretty_assertions = "1"
 insta = { version = "1", features = ["yaml"] }

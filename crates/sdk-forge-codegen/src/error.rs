@@ -41,6 +41,25 @@ pub enum CodegenError {
         /// Description of what went wrong.
         reason: String,
     },
+
+    /// Failed to convert the API model to an [`openapiv3::OpenAPI`] specification.
+    #[error("OpenAPI conversion failed: {reason}")]
+    #[diagnostic(
+        code(codegen::openapi_conversion),
+        help("Check that the API model has a valid base_url and at least one endpoint")
+    )]
+    OpenApiConversion {
+        /// Description of what went wrong.
+        reason: String,
+    },
+
+    /// Failed to serialize the [`openapiv3::OpenAPI`] specification.
+    #[error("OpenAPI serialization failed: {reason}")]
+    #[diagnostic(code(codegen::openapi_serialization))]
+    OpenApiSerialization {
+        /// Description of what went wrong.
+        reason: String,
+    },
 }
 
 #[cfg(test)]
@@ -56,6 +75,30 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "template rendering failed: missing variable",
+            "error message format must be stable"
+        );
+    }
+
+    #[test]
+    fn test_openapi_conversion_error_display() {
+        let err = CodegenError::OpenApiConversion {
+            reason: "no endpoints found".to_owned(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "OpenAPI conversion failed: no endpoints found",
+            "error message format must be stable"
+        );
+    }
+
+    #[test]
+    fn test_openapi_serialization_error_display() {
+        let err = CodegenError::OpenApiSerialization {
+            reason: "invalid JSON".to_owned(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "OpenAPI serialization failed: invalid JSON",
             "error message format must be stable"
         );
     }
