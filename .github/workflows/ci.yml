@@ -75,11 +75,17 @@ jobs:
         run: |
           cargo llvm-cov nextest \
             --lcov --output-path lcov.info \
-            --html --output-dir target/llvm-cov/html \
             --fail-under-lines 90
+
+      - name: Generate HTML coverage report
+        if: always()
+        run: |
+          cargo llvm-cov report \
+            --html --output-dir target/llvm-cov/html
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v6
+        if: always()
         with:
           name: coverage-report
           path: target/llvm-cov/html/
