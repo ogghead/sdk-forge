@@ -1,0 +1,19 @@
+/target
+
+# Coverage
+lcov.info
+*.profraw
+tarpaulin-report.*
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env

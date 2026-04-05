@@ -1,0 +1,12 @@
+# Uncomment to speed up linking on Linux (requires: `apt install clang lld`):
+# [target.x86_64-unknown-linux-gnu]
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Uncomment to speed up linking on macOS with Apple Silicon (requires: `brew install llvm`):
+# [target.aarch64-apple-darwin]
+# rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/opt/llvm/bin/ld64.lld"]
+
+# Uncomment to speed up linking on macOS with Intel (requires: `brew install llvm`):
+# [target.x86_64-apple-darwin]
+# rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/opt/llvm/bin/ld64.lld"]

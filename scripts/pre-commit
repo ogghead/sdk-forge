@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Git pre-commit hook for {{project-name}}
+# Install with: ./scripts/install-hooks.sh
+
+set -euo pipefail
+
+echo "Running pre-commit checks..."
+
+# 1. Formatting check (fast, catches style issues)
+echo "  Checking formatting..."
+cargo fmt -- --check || {
+    echo "ERROR: Code is not formatted. Run 'cargo fmt' and try again."
+    exit 1
+}
+
+# 2. Linting (catches bugs, enforces project conventions)
+echo "  Running clippy..."
+cargo clippy -- -D warnings || {
+    echo "ERROR: Clippy found warnings. Fix them and try again."
+    exit 1
+}
+
+# 3. Tests (catches regressions)
+echo "  Running tests..."
+cargo test --quiet || {
+    echo "ERROR: Tests failed. Fix them and try again."
+    exit 1
+}
+
+# 4. Dependency audit (catches license/advisory issues)
+if command -v cargo-deny &> /dev/null; then
+    echo "  Auditing dependencies..."
+    cargo deny check || {
+        echo "ERROR: Dependency audit failed. Fix issues and try again."
+        exit 1
+    }
+else
+    echo "  Skipping dependency audit (cargo-deny not installed)"
+fi
+
+echo "All pre-commit checks passed!"
