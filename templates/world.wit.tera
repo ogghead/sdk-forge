@@ -41,7 +41,7 @@ interface {{ iface.wit_name }} {
 {% endfor %}
 
 world sdk {
-    import wasi:http/outgoing-handler@0.2.3;
+    import wasi:http/outgoing-handler@0.2.8;
 {% for iface in interfaces %}
     export {{ iface.wit_name }};
 {% endfor %}
