@@ -1,20 +1,22 @@
-//! SDK error enum generation context.
+//! SDK error type generation context.
 //!
 //! Builds the template context for the generated `error.rs` file.
+//! In a WASI component, errors map to WIT `result` types with a
+//! custom `api-error` variant type.
 
 use serde::Serialize;
 
-/// Context for rendering `error.rs.tera`.
+/// Context for rendering the error template.
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorContext {
-    /// HTTP client crate name (`"rquest"`).
-    pub http_client_crate: String,
+    /// Package name for the generated component.
+    pub package_name: String,
 }
 
 /// Build the error template context.
-pub fn build_error_context(http_client_crate: &str) -> ErrorContext {
+pub fn build_error_context(package_name: &str) -> ErrorContext {
     ErrorContext {
-        http_client_crate: http_client_crate.to_owned(),
+        package_name: package_name.to_owned(),
     }
 }
 
@@ -24,7 +26,7 @@ mod tests {
 
     #[test]
     fn test_error_context() {
-        let ctx = build_error_context("rquest");
-        assert_eq!(ctx.http_client_crate, "rquest");
+        let ctx = build_error_context("my-api");
+        assert_eq!(ctx.package_name, "my-api");
     }
 }

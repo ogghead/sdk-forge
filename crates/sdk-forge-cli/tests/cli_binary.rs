@@ -71,7 +71,7 @@ fn test_cli_generate_analyzed_session_succeeds() {
         .assert()
         .success();
 
-    // Verify the crate was actually generated.
+    // Verify the crate was actually generated (now a Wasm component).
     assert!(
         temp.path().join("test-sdk/Cargo.toml").exists(),
         "should generate Cargo.toml"
@@ -79,6 +79,10 @@ fn test_cli_generate_analyzed_session_succeeds() {
     assert!(
         temp.path().join("test-sdk/src/lib.rs").exists(),
         "should generate lib.rs"
+    );
+    assert!(
+        temp.path().join("test-sdk/wit/world.wit").exists(),
+        "should generate world.wit"
     );
 }
 

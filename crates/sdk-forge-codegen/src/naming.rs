@@ -3,7 +3,7 @@
 //! Centralizes all identifier transformations so that templates receive
 //! pre-computed, valid Rust identifiers.
 
-use heck::{ToSnakeCase, ToUpperCamelCase};
+use heck::{ToKebabCase, ToSnakeCase, ToUpperCamelCase};
 
 /// Rust reserved keywords that must be escaped with `r#` when used as identifiers.
 const RESERVED_KEYWORDS: &[&str] = &[
@@ -36,6 +36,35 @@ pub fn to_pascal_case(s: &str) -> String {
 /// Uses the `heck` crate for robust word boundary detection.
 pub fn to_snake_case(s: &str) -> String {
     s.to_snake_case()
+}
+
+/// Convert a string to `kebab-case` (used for WIT identifiers).
+///
+/// Uses the `heck` crate for robust word boundary detection.
+pub fn to_kebab_case(s: &str) -> String {
+    s.to_kebab_case()
+}
+
+/// Build a WIT interface name from a resource group name.
+///
+/// WIT interfaces use kebab-case: `"UserProfiles"` → `"user-profiles"`.
+pub fn wit_interface_name(resource: &str) -> String {
+    to_kebab_case(resource)
+}
+
+/// Build a WIT record name from a type name.
+///
+/// WIT records use kebab-case: `"UserProfile"` → `"user-profile"`.
+pub fn wit_record_name(s: &str) -> String {
+    to_kebab_case(s)
+}
+
+/// Build a WIT function name from an endpoint.
+///
+/// WIT functions use kebab-case: `"list_users"` → `"list-users"`.
+pub fn wit_function_name(resource: &str, method: &str, path_template: &str) -> String {
+    let snake = build_fn_name(resource, method, path_template);
+    to_kebab_case(&snake)
 }
 
 /// Naive singularization for English nouns.
@@ -407,5 +436,45 @@ mod tests {
         let (name, rename) = field_name_and_rename("type");
         assert_eq!(name, "r#type");
         assert_eq!(rename, Some("type".to_owned()));
+    }
+
+    // ── WIT naming ─────────────────────────────────────────────
+
+    #[test]
+    fn test_to_kebab_case() {
+        assert_eq!(to_kebab_case("UserProfiles"), "user-profiles");
+        assert_eq!(to_kebab_case("user_profiles"), "user-profiles");
+        assert_eq!(to_kebab_case("userProfiles"), "user-profiles");
+    }
+
+    #[test]
+    fn test_wit_interface_name() {
+        assert_eq!(wit_interface_name("Users"), "users");
+        assert_eq!(wit_interface_name("UserProfiles"), "user-profiles");
+    }
+
+    #[test]
+    fn test_wit_record_name() {
+        assert_eq!(wit_record_name("User"), "user");
+        assert_eq!(wit_record_name("CreateUserRequest"), "create-user-request");
+    }
+
+    #[test]
+    fn test_wit_function_name() {
+        assert_eq!(
+            wit_function_name("Users", "GET", "/"),
+            "list-users",
+            "GET root should produce list-users"
+        );
+        assert_eq!(
+            wit_function_name("Users", "GET", "/{id}"),
+            "get-user",
+            "GET with param should produce get-user"
+        );
+        assert_eq!(
+            wit_function_name("Users", "POST", "/"),
+            "create-user",
+            "POST should produce create-user"
+        );
     }
 }

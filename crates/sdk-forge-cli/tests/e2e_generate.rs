@@ -1,7 +1,8 @@
 //! End-to-end tests for the `generate` command.
 //!
 //! These tests load fixture `.sdkforge` session files and exercise the
-//! full generate pipeline: load session → extract API model → emit crate.
+//! full generate pipeline: load session → extract API model → emit
+//! Wasm component crate (WIT spec + Rust implementation).
 
 #![allow(
     clippy::unwrap_used,
@@ -79,27 +80,67 @@ fn test_generate_petstore_emits_complete_crate() {
     let output = emit(model, &config).unwrap();
 
     assert_eq!(output.file_count, 6, "should write 6 files");
-    assert!(output.struct_count > 0, "should generate structs");
+    assert!(output.struct_count > 0, "should generate records");
     assert_eq!(output.method_count, 3, "should generate 3 methods");
 
     // Verify all files exist.
     let crate_dir = temp.path().join("petstore-sdk");
     assert!(crate_dir.join("Cargo.toml").exists());
+    assert!(crate_dir.join("wit/world.wit").exists());
     assert!(crate_dir.join("src/lib.rs").exists());
     assert!(crate_dir.join("src/types.rs").exists());
-    assert!(crate_dir.join("src/client.rs").exists());
-    assert!(crate_dir.join("src/endpoints.rs").exists());
+    assert!(crate_dir.join("src/http.rs").exists());
     assert!(crate_dir.join("src/error.rs").exists());
 
-    // Verify Cargo.toml uses rquest.
+    // Verify Cargo.toml uses wit-bindgen and cdylib.
     let cargo_toml = std::fs::read_to_string(crate_dir.join("Cargo.toml")).unwrap();
-    assert!(cargo_toml.contains("rquest"), "should use rquest");
+    assert!(cargo_toml.contains("wit-bindgen"), "should use wit-bindgen");
+    assert!(cargo_toml.contains("cdylib"), "should be a cdylib");
     assert!(
         cargo_toml.contains("name = \"petstore-sdk\""),
         "should have correct crate name"
     );
 
-    // Verify types.rs has Pet struct.
+    // Verify world.wit has WIT records and interfaces.
+    let world_wit = std::fs::read_to_string(crate_dir.join("wit/world.wit")).unwrap();
+    assert!(
+        world_wit.contains("package petstore-sdk:api"),
+        "should have package declaration"
+    );
+    assert!(
+        world_wit.contains("record pet"),
+        "should have pet record (singularized from Pets resource)"
+    );
+    assert!(
+        world_wit.contains("record create-pet-request"),
+        "should have create-pet-request for POST"
+    );
+    assert!(
+        world_wit.contains("interface pets"),
+        "should have pets interface"
+    );
+    assert!(
+        world_wit.contains("list-pets"),
+        "should have list-pets function"
+    );
+    assert!(
+        world_wit.contains("get-pet"),
+        "should have get-pet function"
+    );
+    assert!(
+        world_wit.contains("create-pet"),
+        "should have create-pet function"
+    );
+    assert!(
+        world_wit.contains("wasi:http/outgoing-handler"),
+        "should import WASI HTTP"
+    );
+    assert!(
+        world_wit.contains("record bearer-auth"),
+        "should have bearer-auth record from detected auth pattern"
+    );
+
+    // Verify types.rs has Rust struct definitions.
     let types_src = std::fs::read_to_string(crate_dir.join("src/types.rs")).unwrap();
     assert!(
         types_src.contains("pub struct Pet"),
@@ -110,37 +151,15 @@ fn test_generate_petstore_emits_complete_crate() {
         "should generate CreatePetRequest for POST"
     );
 
-    // Verify client.rs has auth.
-    let client_src = std::fs::read_to_string(crate_dir.join("src/client.rs")).unwrap();
+    // Verify http.rs has WASI HTTP helpers.
+    let http_src = std::fs::read_to_string(crate_dir.join("src/http.rs")).unwrap();
     assert!(
-        client_src.contains("pub struct BearerAuth"),
-        "should have BearerAuth from detected auth pattern"
+        http_src.contains("send_request"),
+        "should have send_request helper"
     );
     assert!(
-        client_src.contains("pub trait AuthStrategy"),
-        "should have AuthStrategy trait"
-    );
-
-    // Verify endpoints.rs has methods.
-    let endpoints_src = std::fs::read_to_string(crate_dir.join("src/endpoints.rs")).unwrap();
-    assert!(
-        endpoints_src.contains("async fn list_pets"),
-        "should have list_pets"
-    );
-    assert!(
-        endpoints_src.contains("async fn get_pet"),
-        "should have get_pet"
-    );
-    assert!(
-        endpoints_src.contains("async fn create_pet"),
-        "should have create_pet"
-    );
-
-    // Verify error.rs uses rquest.
-    let error_src = std::fs::read_to_string(crate_dir.join("src/error.rs")).unwrap();
-    assert!(
-        error_src.contains("rquest::Error"),
-        "errors should reference rquest"
+        http_src.contains("apply_auth"),
+        "should have apply_auth for bearer auth"
     );
 }
 
@@ -160,14 +179,10 @@ fn test_generate_noauth_model_omits_bearer() {
     assert_eq!(output.method_count, 1);
 
     let crate_dir = temp.path().join("noauth-sdk");
-    let client_src = std::fs::read_to_string(crate_dir.join("src/client.rs")).unwrap();
+    let world_wit = std::fs::read_to_string(crate_dir.join("wit/world.wit")).unwrap();
     assert!(
-        !client_src.contains("BearerAuth"),
-        "no-auth SDK should not have BearerAuth"
-    );
-    assert!(
-        client_src.contains("NoAuth"),
-        "should still have NoAuth struct"
+        !world_wit.contains("bearer-auth"),
+        "no-auth SDK should not have bearer-auth record"
     );
 }
 
@@ -181,8 +196,8 @@ fn test_generate_rejects_session_without_api_model() {
 }
 
 #[test]
-#[ignore = "requires network to download rquest from crates.io"]
-fn test_generate_petstore_cargo_check_passes() {
+#[ignore = "requires cargo-component to be installed"]
+fn test_generate_petstore_cargo_component_check_passes() {
     let session = load_session(&common::petstore_analyzed()).unwrap();
     let model = session.api_model.as_ref().unwrap();
 
@@ -196,10 +211,13 @@ fn test_generate_petstore_cargo_check_passes() {
     emit(model, &config).unwrap();
 
     let status = std::process::Command::new("cargo")
-        .arg("check")
+        .args(["component", "check"])
         .current_dir(temp.path().join("petstore-check"))
         .status()
-        .expect("failed to run cargo check");
+        .expect("failed to run cargo component check");
 
-    assert!(status.success(), "generated crate should pass cargo check");
+    assert!(
+        status.success(),
+        "generated crate should pass cargo component check"
+    );
 }

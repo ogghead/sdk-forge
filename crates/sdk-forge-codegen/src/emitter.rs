@@ -1,8 +1,8 @@
-//! SDK crate emission orchestrator.
+//! Wasm component emission orchestrator.
 //!
 //! Coordinates the full code generation pipeline: resolves types from the
-//! API model, renders Tera templates, formats output, and writes a
-//! complete Rust crate to disk.
+//! API model, renders Tera templates, formats Rust output, and writes a
+//! complete Wasm component crate (with WIT spec) to disk.
 
 use std::path::{Path, PathBuf};
 
@@ -13,14 +13,10 @@ use sdk_forge_session::types::ApiModel;
 
 use crate::auth::build_auth_info;
 use crate::cargo_toml::build_cargo_toml_context;
-use crate::client::build_client_context;
+use crate::client::build_component_context;
 use crate::error::CodegenError;
-use crate::errors::build_error_context;
 use crate::formatter::format_rust_source;
-use crate::types::resolve_all;
-
-/// HTTP client crate used by generated SDKs.
-const HTTP_CLIENT_CRATE: &str = "rquest";
+use crate::types::{WitRecord, resolve_all};
 
 /// Configuration for the emitter.
 #[derive(Debug, Clone)]
@@ -40,28 +36,30 @@ pub struct EmitOutput {
     pub crate_dir: PathBuf,
     /// Number of files written.
     pub file_count: usize,
-    /// Number of struct types generated.
+    /// Number of WIT record types generated.
     pub struct_count: usize,
-    /// Number of endpoint methods generated.
+    /// Number of endpoint functions generated.
     pub method_count: usize,
 }
 
-/// Generate a complete Rust SDK crate from an [`ApiModel`].
+/// Generate a complete Wasm component crate from an [`ApiModel`].
+///
+/// Produces both the WIT spec and the Rust implementation.
 ///
 /// # Errors
 ///
 /// Returns [`CodegenError`] variants for template, write, or formatting failures.
 pub fn emit(model: &ApiModel, config: &EmitConfig) -> Result<EmitOutput, CodegenError> {
-    // 1. Resolve types and methods from the API model.
-    let (methods, registry) = resolve_all(model);
-    let structs = registry.into_structs();
+    // 1. Resolve types and interfaces from the API model.
+    let (interfaces, registry) = resolve_all(model);
+    let records = registry.into_records();
+
+    let method_count: usize = interfaces.iter().map(|i| i.functions.len()).sum();
+    let struct_count = records.len();
 
     // 2. Build template contexts.
     let auth_info = build_auth_info(&model.auth);
-    let client_ctx = build_client_context(&model.base_url, HTTP_CLIENT_CRATE, auth_info);
-    let error_ctx = build_error_context(HTTP_CLIENT_CRATE);
-    let cargo_ctx =
-        build_cargo_toml_context(&config.crate_name, &model.base_url, HTTP_CLIENT_CRATE);
+    let cargo_ctx = build_cargo_toml_context(&config.crate_name, &model.base_url);
 
     // 3. Load Tera templates.
     let template_glob = config
@@ -80,91 +78,131 @@ pub fn emit(model: &ApiModel, config: &EmitConfig) -> Result<EmitOutput, Codegen
     // 4. Render each file.
     let crate_dir = config.output_dir.join(&config.crate_name);
     let src_dir = crate_dir.join("src");
+    let wit_dir = crate_dir.join("wit");
 
-    // Render Cargo.toml (not a Rust file — skip rustfmt).
+    // Render Cargo.toml (not Rust — skip rustfmt).
     let cargo_toml = render_template(&tera, "cargo_toml.tera", &cargo_ctx)?;
 
-    // Render Rust source files.
-    let lib_rs = render_template(
-        &tera,
-        "lib.rs.tera",
-        &LibContext {
-            base_url: model.base_url.clone(),
-        },
-    )?;
+    // Render types.rs (needs records, consumed last).
     let types_rs = render_template(
         &tera,
         "types.rs.tera",
         &TypesContext {
-            structs: structs.clone(),
+            records: records.clone(),
         },
     )?;
-    let client_rs = render_template(&tera, "client.rs.tera", &client_ctx)?;
-    let endpoints_rs = render_template(
+
+    // Render WIT spec (not Rust — skip rustfmt).
+    let world_wit = render_template(
         &tera,
-        "endpoints.rs.tera",
-        &EndpointsContext {
-            methods: methods.clone(),
+        "world.wit.tera",
+        &WitWorldContext {
+            package_name: config.crate_name.clone(),
+            base_url: model.base_url.clone(),
+            auth: auth_info.clone(),
+            has_auth: auth_info.is_some(),
+            records,
+            interfaces: interfaces.clone(),
         },
     )?;
-    let error_rs = render_template(&tera, "error.rs.tera", &error_ctx)?;
+
+    // Render http.rs (needs auth_info, clone for component context).
+    let http_rs = render_template(
+        &tera,
+        "http.rs.tera",
+        &HttpContext {
+            has_auth: auth_info.is_some(),
+            auth: auth_info.clone(),
+        },
+    )?;
+
+    // Render lib.rs (uses component context which consumes auth_info + interfaces).
+    let component_ctx =
+        build_component_context(&model.base_url, &config.crate_name, auth_info, interfaces);
+    let lib_rs = render_template(&tera, "lib.rs.tera", &component_ctx)?;
+
+    // Render error.rs.
+    let error_rs = render_template(
+        &tera,
+        "error.rs.tera",
+        &ErrorRenderContext { _placeholder: true },
+    )?;
 
     // 5. Format Rust files.
     let lib_rs_fmt = format_rust_source(&lib_rs)?;
     let types_rs_fmt = format_rust_source(&types_rs)?;
-    let client_rs_fmt = format_rust_source(&client_rs)?;
-    let endpoints_rs_fmt = format_rust_source(&endpoints_rs)?;
+    let http_rs_fmt = format_rust_source(&http_rs)?;
     let error_rs_fmt = format_rust_source(&error_rs)?;
 
     // 6. Write files to disk.
     create_dir(&crate_dir)?;
     create_dir(&src_dir)?;
+    create_dir(&wit_dir)?;
 
     write_file(&crate_dir.join("Cargo.toml"), &cargo_toml)?;
+    write_file(&wit_dir.join("world.wit"), &world_wit)?;
     write_file(&src_dir.join("lib.rs"), &lib_rs_fmt)?;
     write_file(&src_dir.join("types.rs"), &types_rs_fmt)?;
-    write_file(&src_dir.join("client.rs"), &client_rs_fmt)?;
-    write_file(&src_dir.join("endpoints.rs"), &endpoints_rs_fmt)?;
+    write_file(&src_dir.join("http.rs"), &http_rs_fmt)?;
     write_file(&src_dir.join("error.rs"), &error_rs_fmt)?;
 
     let file_count = 6;
 
     tracing::info!(
         crate_dir = %crate_dir.display(),
-        structs = structs.len(),
-        methods = methods.len(),
-        "SDK crate generated"
+        records = struct_count,
+        methods = method_count,
+        "Wasm component crate generated"
     );
 
     Ok(EmitOutput {
         crate_dir,
         file_count,
-        struct_count: structs.len(),
-        method_count: methods.len(),
+        struct_count,
+        method_count,
     })
 }
 
 // ── Template contexts ───────────────────────────────────────────────
 
-/// Context for `lib.rs.tera`.
+/// Context for `world.wit.tera`.
 #[derive(Serialize)]
-struct LibContext {
+struct WitWorldContext {
+    /// Package name.
+    package_name: String,
     /// Base URL for the doc comment.
     base_url: String,
+    /// Auth info.
+    auth: Option<crate::auth::AuthInfo>,
+    /// Whether auth is configured.
+    has_auth: bool,
+    /// All generated records.
+    records: Vec<WitRecord>,
+    /// All interfaces.
+    interfaces: Vec<crate::types::WitInterface>,
 }
 
 /// Context for `types.rs.tera`.
 #[derive(Serialize)]
 struct TypesContext {
-    /// All generated struct definitions.
-    structs: Vec<crate::types::RustStruct>,
+    /// All generated record definitions.
+    records: Vec<WitRecord>,
 }
 
-/// Context for `endpoints.rs.tera`.
+/// Context for `http.rs.tera`.
 #[derive(Serialize)]
-struct EndpointsContext {
-    /// All generated endpoint methods.
-    methods: Vec<crate::types::EndpointMethod>,
+struct HttpContext {
+    /// Whether auth is configured.
+    has_auth: bool,
+    /// Auth info.
+    auth: Option<crate::auth::AuthInfo>,
+}
+
+/// Context for `error.rs.tera` (no variables needed, but Tera requires a JSON object).
+#[derive(Serialize)]
+struct ErrorRenderContext {
+    /// Placeholder to make Tera happy (requires a JSON object).
+    _placeholder: bool,
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -295,7 +333,6 @@ mod tests {
 
     /// Path to the templates directory relative to workspace root.
     fn templates_dir() -> PathBuf {
-        // In tests, we're in the workspace root.
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         manifest_dir
             .parent()
@@ -321,7 +358,7 @@ mod tests {
 
         let output = result.unwrap();
         assert_eq!(output.file_count, 6, "should write 6 files");
-        assert!(output.struct_count > 0, "should generate structs");
+        assert!(output.struct_count > 0, "should generate records");
         assert_eq!(output.method_count, 3, "should generate 3 methods");
 
         // Verify files exist.
@@ -336,16 +373,16 @@ mod tests {
             "types.rs should exist"
         );
         assert!(
-            crate_dir.join("src/client.rs").exists(),
-            "client.rs should exist"
-        );
-        assert!(
-            crate_dir.join("src/endpoints.rs").exists(),
-            "endpoints.rs should exist"
+            crate_dir.join("src/http.rs").exists(),
+            "http.rs should exist"
         );
         assert!(
             crate_dir.join("src/error.rs").exists(),
             "error.rs should exist"
+        );
+        assert!(
+            crate_dir.join("wit/world.wit").exists(),
+            "world.wit should exist"
         );
 
         // Verify Cargo.toml content.
@@ -355,8 +392,35 @@ mod tests {
             "Cargo.toml should have crate name"
         );
         assert!(
-            cargo_toml.contains("rquest"),
-            "Cargo.toml should reference rquest"
+            cargo_toml.contains("cdylib"),
+            "Cargo.toml should specify cdylib crate type"
+        );
+        assert!(
+            cargo_toml.contains("wit-bindgen"),
+            "Cargo.toml should reference wit-bindgen"
+        );
+
+        // Verify world.wit has WIT records and interfaces.
+        let world_wit = std::fs::read_to_string(crate_dir.join("wit/world.wit")).unwrap();
+        assert!(
+            world_wit.contains("package example-api:api"),
+            "WIT should have package declaration"
+        );
+        assert!(
+            world_wit.contains("record user"),
+            "WIT should have user record"
+        );
+        assert!(
+            world_wit.contains("interface users"),
+            "WIT should have users interface"
+        );
+        assert!(
+            world_wit.contains("list-users"),
+            "WIT should have list-users function"
+        );
+        assert!(
+            world_wit.contains("wasi:http/outgoing-handler"),
+            "WIT should import wasi:http"
         );
 
         // Verify types.rs has struct definitions.
@@ -368,32 +432,6 @@ mod tests {
         assert!(
             types_src.contains("pub struct CreateUserRequest"),
             "should generate CreateUserRequest"
-        );
-
-        // Verify client.rs has auth.
-        let client_src = std::fs::read_to_string(crate_dir.join("src/client.rs")).unwrap();
-        assert!(
-            client_src.contains("pub trait AuthStrategy"),
-            "should have AuthStrategy trait"
-        );
-        assert!(
-            client_src.contains("pub struct BearerAuth"),
-            "should have BearerAuth struct"
-        );
-
-        // Verify endpoints.rs has methods.
-        let endpoints_src = std::fs::read_to_string(crate_dir.join("src/endpoints.rs")).unwrap();
-        assert!(
-            endpoints_src.contains("async fn list_users"),
-            "should have list_users method"
-        );
-        assert!(
-            endpoints_src.contains("async fn get_user"),
-            "should have get_user method"
-        );
-        assert!(
-            endpoints_src.contains("async fn create_user"),
-            "should have create_user method"
         );
 
         // Cleanup.
@@ -437,14 +475,10 @@ mod tests {
         assert!(result.is_ok(), "emit without auth should succeed");
 
         let crate_dir = temp.join("public-api");
-        let client_src = std::fs::read_to_string(crate_dir.join("src/client.rs")).unwrap();
+        let world_wit = std::fs::read_to_string(crate_dir.join("wit/world.wit")).unwrap();
         assert!(
-            !client_src.contains("BearerAuth"),
-            "no-auth model should not generate BearerAuth"
-        );
-        assert!(
-            client_src.contains("NoAuth"),
-            "should still have NoAuth struct"
+            !world_wit.contains("bearer-auth"),
+            "no-auth model should not have bearer-auth record"
         );
 
         let _ = std::fs::remove_dir_all(&temp);

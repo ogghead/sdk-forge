@@ -1,9 +1,8 @@
-//! Auth context generation for templates.
+//! Auth context generation for WIT/WASI templates.
 //!
-//! Produces data that drives the `client.rs.tera` template to generate
-//! working auth implementations — not just a trait. The generated SDK
-//! includes a default auth struct that handles the detected pattern
-//! (bearer, API key, cookie, basic) out of the box.
+//! Produces data that drives the WIT and Rust templates to generate
+//! auth configuration types. In a WASI component, auth is a config
+//! record that the host provides — not a trait with runtime polymorphism.
 
 use sdk_forge_session::types::{ApiKeyLocation, AuthPattern};
 use serde::Serialize;
@@ -15,9 +14,11 @@ pub struct AuthInfo {
     pub variant: String,
     /// Human-readable description for doc comments.
     pub description: String,
-    /// Name of the generated default auth struct (e.g. `"BearerAuth"`).
-    pub struct_name: String,
-    /// Fields for the generated auth struct.
+    /// `PascalCase` Rust struct name (e.g. `"BearerAuth"`).
+    pub rust_name: String,
+    /// `kebab-case` WIT record name (e.g. `"bearer-auth"`).
+    pub wit_name: String,
+    /// Fields for the generated auth config record.
     pub fields: Vec<AuthField>,
     /// Where the credential is injected (e.g. `"header"`, `"query"`, `"cookie"`).
     pub location: String,
@@ -25,13 +26,17 @@ pub struct AuthInfo {
     pub credential_name: String,
 }
 
-/// A field on the generated auth struct.
+/// A field on the generated auth config record.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuthField {
-    /// Field name.
-    pub name: String,
+    /// `snake_case` Rust field name.
+    pub rust_name: String,
+    /// `kebab-case` WIT field name.
+    pub wit_name: String,
     /// Rust type.
     pub rust_type: String,
+    /// WIT type.
+    pub wit_type: String,
     /// Doc comment.
     pub doc_comment: String,
 }
@@ -46,10 +51,13 @@ pub fn build_auth_info(pattern: &Option<AuthPattern>) -> Option<AuthInfo> {
         AuthPattern::BearerToken => AuthInfo {
             variant: "bearer".to_owned(),
             description: "Bearer token authentication".to_owned(),
-            struct_name: "BearerAuth".to_owned(),
+            rust_name: "BearerAuth".to_owned(),
+            wit_name: "bearer-auth".to_owned(),
             fields: vec![AuthField {
-                name: "token".to_owned(),
+                rust_name: "token".to_owned(),
+                wit_name: "token".to_owned(),
                 rust_type: "String".to_owned(),
+                wit_type: "string".to_owned(),
                 doc_comment: "The bearer token value.".to_owned(),
             }],
             location: "header".to_owned(),
@@ -63,10 +71,13 @@ pub fn build_auth_info(pattern: &Option<AuthPattern>) -> Option<AuthInfo> {
             AuthInfo {
                 variant: "api_key".to_owned(),
                 description: format!("API key authentication via {loc_str} `{name}`"),
-                struct_name: "ApiKeyAuth".to_owned(),
+                rust_name: "ApiKeyAuth".to_owned(),
+                wit_name: "api-key-auth".to_owned(),
                 fields: vec![AuthField {
-                    name: "key".to_owned(),
+                    rust_name: "key".to_owned(),
+                    wit_name: "key".to_owned(),
                     rust_type: "String".to_owned(),
+                    wit_type: "string".to_owned(),
                     doc_comment: "The API key value.".to_owned(),
                 }],
                 location: loc_str.to_owned(),
@@ -76,10 +87,13 @@ pub fn build_auth_info(pattern: &Option<AuthPattern>) -> Option<AuthInfo> {
         AuthPattern::Cookie { cookie_name } => AuthInfo {
             variant: "cookie".to_owned(),
             description: format!("Cookie-based authentication using `{cookie_name}`"),
-            struct_name: "CookieAuth".to_owned(),
+            rust_name: "CookieAuth".to_owned(),
+            wit_name: "cookie-auth".to_owned(),
             fields: vec![AuthField {
-                name: "value".to_owned(),
+                rust_name: "value".to_owned(),
+                wit_name: "value".to_owned(),
                 rust_type: "String".to_owned(),
+                wit_type: "string".to_owned(),
                 doc_comment: format!("The `{cookie_name}` cookie value."),
             }],
             location: "cookie".to_owned(),
@@ -88,16 +102,21 @@ pub fn build_auth_info(pattern: &Option<AuthPattern>) -> Option<AuthInfo> {
         AuthPattern::BasicAuth => AuthInfo {
             variant: "basic".to_owned(),
             description: "HTTP Basic authentication".to_owned(),
-            struct_name: "BasicAuth".to_owned(),
+            rust_name: "BasicAuth".to_owned(),
+            wit_name: "basic-auth".to_owned(),
             fields: vec![
                 AuthField {
-                    name: "username".to_owned(),
+                    rust_name: "username".to_owned(),
+                    wit_name: "username".to_owned(),
                     rust_type: "String".to_owned(),
+                    wit_type: "string".to_owned(),
                     doc_comment: "The username.".to_owned(),
                 },
                 AuthField {
-                    name: "password".to_owned(),
+                    rust_name: "password".to_owned(),
+                    wit_name: "password".to_owned(),
                     rust_type: "String".to_owned(),
+                    wit_type: "string".to_owned(),
                     doc_comment: "The password.".to_owned(),
                 },
             ],
@@ -122,7 +141,8 @@ mod tests {
 
         let auth = info.unwrap_or_else(|| unreachable!());
         assert_eq!(auth.variant, "bearer");
-        assert_eq!(auth.struct_name, "BearerAuth");
+        assert_eq!(auth.rust_name, "BearerAuth");
+        assert_eq!(auth.wit_name, "bearer-auth");
         assert_eq!(auth.fields.len(), 1, "bearer has one field: token");
         assert_eq!(auth.location, "header");
     }
@@ -137,7 +157,8 @@ mod tests {
 
         let auth = info.unwrap_or_else(|| unreachable!());
         assert_eq!(auth.variant, "api_key");
-        assert_eq!(auth.struct_name, "ApiKeyAuth");
+        assert_eq!(auth.rust_name, "ApiKeyAuth");
+        assert_eq!(auth.wit_name, "api-key-auth");
         assert_eq!(auth.location, "header");
         assert_eq!(auth.credential_name, "X-API-Key");
     }
@@ -164,7 +185,8 @@ mod tests {
 
         let auth = info.unwrap_or_else(|| unreachable!());
         assert_eq!(auth.variant, "cookie");
-        assert_eq!(auth.struct_name, "CookieAuth");
+        assert_eq!(auth.rust_name, "CookieAuth");
+        assert_eq!(auth.wit_name, "cookie-auth");
         assert_eq!(auth.credential_name, "session_id");
     }
 
@@ -175,7 +197,8 @@ mod tests {
 
         let auth = info.unwrap_or_else(|| unreachable!());
         assert_eq!(auth.variant, "basic");
-        assert_eq!(auth.struct_name, "BasicAuth");
+        assert_eq!(auth.rust_name, "BasicAuth");
+        assert_eq!(auth.wit_name, "basic-auth");
         assert_eq!(auth.fields.len(), 2, "basic auth has username + password");
     }
 

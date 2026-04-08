@@ -1,17 +1,12 @@
-//! Per-endpoint method metadata generation.
+//! Per-endpoint method metadata and pagination helpers.
 //!
-//! Builds [`EndpointMethod`](crate::types::EndpointMethod) values from
-//! an [`ApiModel`](sdk_forge_session::types::ApiModel) and a
-//! [`TypeRegistry`](crate::types::TypeRegistry). This module is thin
-//! because the heavy lifting happens in [`crate::types::resolve_all`].
-
-// Endpoint method generation is handled directly by `types::resolve_all`.
-// This module exists as a namespace for future pagination-aware helpers.
+//! Most endpoint method generation is handled by [`crate::types::resolve_all`].
+//! This module provides pagination-aware helpers and filtering utilities.
 
 use sdk_forge_session::types::PaginationPattern;
 use serde::Serialize;
 
-use crate::types::EndpointMethod;
+use crate::types::WitFunction;
 
 /// Pagination metadata for template rendering.
 #[derive(Debug, Clone, Serialize)]
@@ -46,11 +41,11 @@ pub fn build_pagination_info(pattern: &Option<PaginationPattern>) -> Option<Pagi
     Some(PaginationInfo { style, params })
 }
 
-/// Filter methods that look like list operations (GET returning `Vec<>`).
-pub fn list_methods(methods: &[EndpointMethod]) -> Vec<&EndpointMethod> {
-    methods
+/// Filter functions that look like list operations (GET returning `list<>`).
+pub fn list_functions(functions: &[WitFunction]) -> Vec<&WitFunction> {
+    functions
         .iter()
-        .filter(|m| m.http_method == "get" && m.response_type.starts_with("Vec<"))
+        .filter(|f| f.http_method == "get" && f.response_rust.starts_with("Vec<"))
         .collect()
 }
 
@@ -58,8 +53,8 @@ pub fn list_methods(methods: &[EndpointMethod]) -> Vec<&EndpointMethod> {
 mod tests {
     use sdk_forge_session::types::PaginationPattern;
 
-    use super::{build_pagination_info, list_methods};
-    use crate::types::EndpointMethod;
+    use super::{build_pagination_info, list_functions};
+    use crate::types::WitFunction;
 
     #[test]
     fn test_pagination_cursor() {
@@ -93,45 +88,54 @@ mod tests {
     }
 
     #[test]
-    fn test_list_methods_filter() {
-        let methods = vec![
-            EndpointMethod {
-                fn_name: "list_users".to_owned(),
+    fn test_list_functions_filter() {
+        let functions = vec![
+            WitFunction {
+                wit_name: "list-users".to_owned(),
+                rust_name: "list_users".to_owned(),
                 doc_comment: String::new(),
                 http_method: "get".to_owned(),
                 path_format_str: String::new(),
                 path_params: Vec::new(),
                 query_params: Vec::new(),
-                request_body_type: None,
-                response_type: "Vec<User>".to_owned(),
+                request_body_wit: None,
+                request_body_rust: None,
+                response_wit: "list<user>".to_owned(),
+                response_rust: "Vec<User>".to_owned(),
                 requires_auth: false,
             },
-            EndpointMethod {
-                fn_name: "get_user".to_owned(),
+            WitFunction {
+                wit_name: "get-user".to_owned(),
+                rust_name: "get_user".to_owned(),
                 doc_comment: String::new(),
                 http_method: "get".to_owned(),
                 path_format_str: String::new(),
                 path_params: Vec::new(),
                 query_params: Vec::new(),
-                request_body_type: None,
-                response_type: "User".to_owned(),
+                request_body_wit: None,
+                request_body_rust: None,
+                response_wit: "user".to_owned(),
+                response_rust: "User".to_owned(),
                 requires_auth: false,
             },
-            EndpointMethod {
-                fn_name: "create_user".to_owned(),
+            WitFunction {
+                wit_name: "create-user".to_owned(),
+                rust_name: "create_user".to_owned(),
                 doc_comment: String::new(),
                 http_method: "post".to_owned(),
                 path_format_str: String::new(),
                 path_params: Vec::new(),
                 query_params: Vec::new(),
-                request_body_type: Some("CreateUserRequest".to_owned()),
-                response_type: "User".to_owned(),
+                request_body_wit: Some("create-user-request".to_owned()),
+                request_body_rust: Some("CreateUserRequest".to_owned()),
+                response_wit: "user".to_owned(),
+                response_rust: "User".to_owned(),
                 requires_auth: false,
             },
         ];
 
-        let lists = list_methods(&methods);
+        let lists = list_functions(&functions);
         assert_eq!(lists.len(), 1, "only list_users returns Vec<>");
-        assert_eq!(lists.first().unwrap().fn_name, "list_users");
+        assert_eq!(lists.first().unwrap().rust_name, "list_users");
     }
 }

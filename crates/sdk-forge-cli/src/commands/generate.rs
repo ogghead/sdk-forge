@@ -1,6 +1,7 @@
 //! Implementation of the `sdk-forge generate` command.
 //!
-//! Takes an analyzed session and emits a complete Rust SDK crate.
+//! Takes an analyzed session and emits a Wasm component crate:
+//! a WIT spec describing the API and a Rust implementation using WASI HTTP.
 
 use std::path::PathBuf;
 
@@ -61,7 +62,7 @@ pub fn execute(args: &GenerateArgs) -> miette::Result<()> {
     tracing::info!(
         session = %args.session.display(),
         output = %args.output.display(),
-        "generating SDK"
+        "generating Wasm component SDK"
     );
 
     let session = load_session(&args.session).wrap_err("failed to load session file")?;
@@ -88,26 +89,28 @@ pub fn execute(args: &GenerateArgs) -> miette::Result<()> {
     tracing::info!(
         crate_dir = %output.crate_dir.display(),
         files = output.file_count,
-        structs = output.struct_count,
+        records = output.struct_count,
         methods = output.method_count,
-        "SDK generated successfully"
+        "Wasm component SDK generated successfully"
     );
 
     if args.check {
-        tracing::info!("running cargo check on generated crate");
+        tracing::info!("running cargo component check on generated crate");
         let status = std::process::Command::new("cargo")
-            .arg("check")
+            .args(["component", "check"])
             .current_dir(&output.crate_dir)
             .status();
         match status {
             Ok(s) if s.success() => {
-                tracing::info!("cargo check passed");
+                tracing::info!("cargo component check passed");
             }
             Ok(s) => {
-                miette::bail!("cargo check failed with exit code: {}", s);
+                miette::bail!("cargo component check failed with exit code: {}", s);
             }
             Err(err) => {
-                miette::bail!("failed to run cargo check: {err}");
+                miette::bail!(
+                    "failed to run cargo component check (is cargo-component installed?): {err}"
+                );
             }
         }
     }

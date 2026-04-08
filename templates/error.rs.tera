@@ -1,22 +1,20 @@
-//! Error types for the generated SDK.
+//! Error types for the generated WASI component SDK.
 
 /// Errors returned by API operations.
-#[derive(Debug, thiserror::Error)]
-pub enum ApiError {
-    /// HTTP transport error.
-    #[error("HTTP error: {0}")]
-    Http({{ http_client_crate }}::Error),
+#[derive(Debug, Clone)]
+pub struct ApiError {
+    /// HTTP status code (0 if no response was received).
+    pub status_code: u16,
+    /// Error message or response body.
+    pub message: String,
+}
 
-    /// API returned a non-success status code.
-    #[error("API error (HTTP {status}): {body}")]
-    Api {
-        /// HTTP status code.
-        status: {{ http_client_crate }}::StatusCode,
-        /// Response body text.
-        body: String,
-    },
-
-    /// Failed to deserialize the response body.
-    #[error("deserialization error: {0}")]
-    Deserialize({{ http_client_crate }}::Error),
+impl core::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.status_code > 0 {
+            write!(f, "API error (HTTP {}): {}", self.status_code, self.message)
+        } else {
+            write!(f, "API error: {}", self.message)
+        }
+    }
 }

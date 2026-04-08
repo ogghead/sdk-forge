@@ -2,11 +2,18 @@
 name = "{{ crate_name }}"
 version = "0.1.0"
 edition = "2021"
-description = "Generated SDK for {{ base_url }}"
+description = "Generated WASI component SDK for {{ base_url }}"
+
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
-{{ http_client_crate }} = { version = "0.12", features = ["json"] }
+wit-bindgen = "0.36"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[package.metadata.component]
+package = "{{ crate_name }}:api"
+
+[package.metadata.component.target]
+world = "sdk"

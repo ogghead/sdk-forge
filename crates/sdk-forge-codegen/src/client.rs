@@ -1,37 +1,42 @@
-//! HTTP client context generation for templates.
+//! Component context generation for WIT/WASI templates.
 //!
-//! Builds the context for `client.rs.tera` — the generated SDK's main
-//! client struct, `AuthStrategy` trait, and default auth implementations.
+//! Builds the context for the generated Wasm component's world definition
+//! and Rust implementation.
 
 use serde::Serialize;
 
 use crate::auth::AuthInfo;
+use crate::types::WitInterface;
 
-/// Context for rendering `client.rs.tera`.
+/// Context for rendering the WIT world and Rust component implementation.
 #[derive(Debug, Clone, Serialize)]
-pub struct ClientContext {
+pub struct ComponentContext {
     /// Base URL of the API.
     pub base_url: String,
-    /// HTTP client crate name (`"rquest"`).
-    pub http_client_crate: String,
+    /// Component/package name in kebab-case.
+    pub package_name: String,
     /// Auth information, if auth was detected.
     pub auth: Option<AuthInfo>,
     /// Whether any endpoint requires auth.
     pub has_auth: bool,
+    /// WIT interfaces (one per resource group).
+    pub interfaces: Vec<WitInterface>,
 }
 
-/// Build the client template context.
-pub fn build_client_context(
+/// Build the component template context.
+pub fn build_component_context(
     base_url: &str,
-    http_client_crate: &str,
+    package_name: &str,
     auth: Option<AuthInfo>,
-) -> ClientContext {
+    interfaces: Vec<WitInterface>,
+) -> ComponentContext {
     let has_auth = auth.is_some();
-    ClientContext {
+    ComponentContext {
         base_url: base_url.to_owned(),
-        http_client_crate: http_client_crate.to_owned(),
+        package_name: package_name.to_owned(),
         auth,
         has_auth,
+        interfaces,
     }
 }
 
@@ -39,21 +44,22 @@ pub fn build_client_context(
 mod tests {
     use crate::auth::build_auth_info;
 
-    use super::build_client_context;
+    use super::build_component_context;
 
     #[test]
-    fn test_client_context_with_auth() {
+    fn test_component_context_with_auth() {
         let auth = build_auth_info(&Some(sdk_forge_session::types::AuthPattern::BearerToken));
-        let ctx = build_client_context("https://api.example.com", "rquest", auth);
+        let ctx = build_component_context("https://api.example.com", "my-api", auth, Vec::new());
 
         assert!(ctx.has_auth, "should have auth");
         assert!(ctx.auth.is_some());
         assert_eq!(ctx.base_url, "https://api.example.com");
+        assert_eq!(ctx.package_name, "my-api");
     }
 
     #[test]
-    fn test_client_context_without_auth() {
-        let ctx = build_client_context("https://api.example.com", "rquest", None);
+    fn test_component_context_without_auth() {
+        let ctx = build_component_context("https://api.example.com", "my-api", None, Vec::new());
         assert!(!ctx.has_auth, "should not have auth");
         assert!(ctx.auth.is_none());
     }

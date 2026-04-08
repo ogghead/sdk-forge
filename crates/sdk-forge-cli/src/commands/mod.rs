@@ -25,7 +25,7 @@ pub enum Command {
     Record(RecordArgs),
     /// Analyze a recorded session using Claude to reverse-engineer the API.
     Analyze(AnalyzeArgs),
-    /// Generate a typed Rust SDK from an analyzed session.
+    /// Generate a Wasm component SDK (WIT spec + Rust implementation) from an analyzed session.
     Generate(GenerateArgs),
     /// Inspect a recorded session (view captured endpoints).
     Inspect(InspectArgs),
@@ -59,10 +59,10 @@ pub struct GenerateArgs {
     /// Output directory for the generated SDK crate.
     #[arg(short, long, default_value = "output")]
     pub output: PathBuf,
-    /// Name for the generated SDK crate.
+    /// Name for the generated component crate.
     #[arg(short, long)]
     pub name: Option<String>,
-    /// Run `cargo check` on the generated crate.
+    /// Run `cargo component check` on the generated crate (requires cargo-component).
     #[arg(long)]
     pub check: bool,
 }
