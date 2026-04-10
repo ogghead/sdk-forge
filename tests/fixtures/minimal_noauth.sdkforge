@@ -1,0 +1,45 @@
+{
+  "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+  "created_at": "2026-01-15T10:30:00Z",
+  "target_url": "https://public-api.example.com",
+  "browser_version": "Chromium 130",
+  "exchanges": [],
+  "api_model": {
+    "base_url": "https://public-api.example.com",
+    "auth": null,
+    "resources": [
+      {
+        "name": "Items",
+        "base_path": "/items",
+        "endpoints": [
+          {
+            "method": "GET",
+            "path_template": "/",
+            "description": "List items",
+            "request_schema": null,
+            "response_schema": {
+              "type": "Array",
+              "items": {
+                "type": "Object",
+                "properties": {
+                  "id": {"type": "Integer"},
+                  "title": {"type": "String", "format": null}
+                },
+                "required": ["id", "title"]
+              }
+            },
+            "requires_auth": false,
+            "path_params": [],
+            "query_params": []
+          }
+        ]
+      }
+    ],
+    "pagination": null
+  },
+  "metadata": {
+    "duration_ms": 1000,
+    "raw_exchange_count": 1,
+    "notes": "Minimal no-auth fixture"
+  }
+}

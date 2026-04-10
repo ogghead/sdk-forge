@@ -1,0 +1,27 @@
+[package]
+name = "sdk-forge-session"
+description = "Shared session types and serialization for SDK Forge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+miette = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["thiserror"]
+
+[lints]
+workspace = true

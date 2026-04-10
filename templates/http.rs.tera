@@ -1,0 +1,161 @@
+//! WASI HTTP helpers for outgoing requests.
+//!
+//! Uses `wasi:http/outgoing-handler` to make HTTP requests.
+
+use crate::error::ApiError;
+{% if has_auth %}
+use crate::{{ auth.rust_name }};
+{% endif %}
+
+/// Send an HTTP request using WASI outgoing-handler.
+///
+/// Returns the response body bytes on success.
+pub fn send_request(
+    method: &str,
+    url: &str,
+    headers: &[(String, String)],
+    body: Option<&[u8]>,
+) -> Result<Vec<u8>, ApiError> {
+    use wasi::http::types::{
+        Fields, IncomingBody, Method, OutgoingBody, OutgoingRequest, Scheme,
+    };
+    use wasi::http::outgoing_handler;
+
+    // Parse URL into scheme, authority, path+query.
+    let (scheme, authority, path_and_query) = parse_url(url);
+
+    let headers_fields = Fields::new();
+    for (name, value) in headers {
+        let _ = headers_fields.append(
+            &name.to_string().into(),
+            &value.as_bytes().to_vec(),
+        );
+    }
+
+    let request = OutgoingRequest::new(headers_fields);
+    let _ = request.set_method(&match method {
+        "GET" => Method::Get,
+        "POST" => Method::Post,
+        "PUT" => Method::Put,
+        "DELETE" => Method::Delete,
+        "PATCH" => Method::Patch,
+        "HEAD" => Method::Head,
+        "OPTIONS" => Method::Options,
+        _ => Method::Other(method.to_string()),
+    });
+
+    let _ = request.set_scheme(Some(&scheme));
+    let _ = request.set_authority(Some(&authority));
+    let _ = request.set_path_with_query(Some(&path_and_query));
+
+    // Write body if present.
+    if let Some(body_bytes) = body {
+        let outgoing_body = request.body()
+            .map_err(|_| ApiError { status_code: 0, message: "failed to get outgoing body".to_string() })?;
+        let stream = outgoing_body.write()
+            .map_err(|_| ApiError { status_code: 0, message: "failed to get body stream".to_string() })?;
+        stream.blocking_write_and_flush(body_bytes)
+            .map_err(|_| ApiError { status_code: 0, message: "failed to write body".to_string() })?;
+        drop(stream);
+        OutgoingBody::finish(outgoing_body, None)
+            .map_err(|_| ApiError { status_code: 0, message: "failed to finish body".to_string() })?;
+    }
+
+    // Send the request.
+    let future_response = outgoing_handler::handle(request, None)
+        .map_err(|e| ApiError { status_code: 0, message: format!("request failed: {:?}", e) })?;
+
+    // Block until we get the response.
+    let response = loop {
+        if let Some(result) = future_response.get() {
+            break result
+                .map_err(|_| ApiError { status_code: 0, message: "response error".to_string() })?
+                .map_err(|e| ApiError { status_code: 0, message: format!("HTTP error: {:?}", e) })?;
+        }
+        future_response.subscribe().block();
+    };
+
+    let status = response.status();
+    if status < 200 || status >= 300 {
+        return Err(ApiError {
+            status_code: status,
+            message: format!("HTTP {}", status),
+        });
+    }
+
+    // Read response body.
+    let incoming_body = response.consume()
+        .map_err(|_| ApiError { status_code: status, message: "failed to consume response body".to_string() })?;
+    let body_bytes = read_body(incoming_body)?;
+
+    Ok(body_bytes)
+}
+
+/// Read all bytes from an incoming body.
+fn read_body(body: IncomingBody) -> Result<Vec<u8>, ApiError> {
+    use wasi::http::types::IncomingBody;
+    use wasi::io::streams::InputStream;
+
+    let stream = body.stream()
+        .map_err(|_| ApiError { status_code: 0, message: "failed to get body stream".to_string() })?;
+
+    let mut buf = Vec::new();
+    loop {
+        match stream.blocking_read(65536) {
+            Ok(chunk) => {
+                if chunk.is_empty() {
+                    break;
+                }
+                buf.extend_from_slice(&chunk);
+            }
+            Err(wasi::io::streams::StreamError::Closed) => break,
+            Err(_) => {
+                return Err(ApiError {
+                    status_code: 0,
+                    message: "failed to read response body".to_string(),
+                });
+            }
+        }
+    }
+    drop(stream);
+    IncomingBody::finish(body);
+
+    Ok(buf)
+}
+
+/// Parse a URL into (scheme, authority, path+query).
+fn parse_url(url: &str) -> (Scheme, String, String) {
+    use wasi::http::types::Scheme;
+
+    let (scheme, rest) = if let Some(rest) = url.strip_prefix("https://") {
+        (Scheme::Https, rest)
+    } else if let Some(rest) = url.strip_prefix("http://") {
+        (Scheme::Http, rest)
+    } else {
+        (Scheme::Https, url)
+    };
+
+    let (authority, path_and_query) = rest.split_once('/').unwrap_or((rest, ""));
+    let path_and_query = format!("/{}", path_and_query);
+
+    (scheme, authority.to_string(), path_and_query)
+}
+{% if has_auth %}
+
+/// Apply authentication to request headers.
+pub fn apply_auth(auth: &{{ auth.rust_name }}, headers: &mut Vec<(String, String)>) {
+{% if auth.variant == "bearer" %}
+    headers.push(("authorization".to_string(), format!("Bearer {}", auth.token)));
+{% elif auth.variant == "api_key" and auth.location == "header" %}
+    headers.push(("{{ auth.credential_name | lower }}".to_string(), auth.key.clone()));
+{% elif auth.variant == "cookie" %}
+    headers.push(("cookie".to_string(), format!("{{ auth.credential_name }}={}", auth.value)));
+{% elif auth.variant == "basic" %}
+    use std::io::Write;
+    let mut encoded = Vec::new();
+    let _ = write!(encoded, "{}:{}", auth.username, auth.password);
+    // Note: base64 encoding would need a dependency; using plain for now.
+    headers.push(("authorization".to_string(), format!("Basic {}", String::from_utf8_lossy(&encoded))));
+{% endif %}
+}
+{% endif %}

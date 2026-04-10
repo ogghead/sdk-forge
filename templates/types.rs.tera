@@ -1,0 +1,19 @@
+//! Request and response types.
+//!
+//! These structs mirror the WIT records for JSON serialization/deserialization.
+
+use serde::{Deserialize, Serialize};
+{% for record in records %}
+
+/// {{ record.doc_comment }}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct {{ record.rust_name }} {
+{% for field in record.fields %}
+{% if field.serde_rename %}    #[serde(rename = "{{ field.serde_rename }}")]
+{% endif %}
+{% if field.is_optional %}    #[serde(skip_serializing_if = "Option::is_none")]
+{% endif %}
+    pub {{ field.rust_name }}: {{ field.rust_type }},
+{% endfor %}
+}
+{% endfor %}

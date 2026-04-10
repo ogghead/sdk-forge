@@ -1,0 +1,19 @@
+[package]
+name = "{{ crate_name }}"
+version = "0.1.0"
+edition = "2021"
+description = "Generated WASI component SDK for {{ base_url }}"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.47"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[package.metadata.component]
+package = "{{ crate_name }}:api"
+
+[package.metadata.component.target]
+world = "sdk"

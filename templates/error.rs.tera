@@ -1,0 +1,20 @@
+//! Error types for the generated WASI component SDK.
+
+/// Errors returned by API operations.
+#[derive(Debug, Clone)]
+pub struct ApiError {
+    /// HTTP status code (0 if no response was received).
+    pub status_code: u16,
+    /// Error message or response body.
+    pub message: String,
+}
+
+impl core::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.status_code > 0 {
+            write!(f, "API error (HTTP {}): {}", self.status_code, self.message)
+        } else {
+            write!(f, "API error: {}", self.message)
+        }
+    }
+}
