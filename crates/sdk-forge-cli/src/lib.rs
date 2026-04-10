@@ -1,4 +1,4 @@
-//! SDK Forge — Record web interactions, reverse-engineer APIs, generate typed Rust SDKs.
+//! SDK Forge — Record web interactions, reverse-engineer APIs, generate Wasm component SDKs.
 //!
 //! This is the library root for the CLI. All initialization and command
 //! dispatch logic lives here so it can be tested and covered.

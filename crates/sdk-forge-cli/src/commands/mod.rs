@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-/// SDK Forge — Record web interactions, reverse-engineer APIs, generate typed Rust SDKs.
+/// SDK Forge — Record web interactions, reverse-engineer APIs, generate Wasm component SDKs.
 #[derive(Debug, Parser)]
 #[command(name = "sdk-forge", version, about)]
 pub struct Cli {

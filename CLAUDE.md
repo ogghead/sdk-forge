@@ -2,7 +2,7 @@
 
 Rust workspace (edition 2024, MSRV 1.93, stable channel).
 
-Record web interactions, reverse-engineer APIs via Claude, and generate typed Rust SDKs.
+Record web interactions, reverse-engineer APIs via Claude, and generate portable Wasm component SDKs (WIT spec + Rust implementation).
 
 ## Commands
 
@@ -85,16 +85,18 @@ crates/
       api_model.rs                # API model construction
       error.rs                    # Analyzer error types
 
-  sdk-forge-codegen/              # Rust SDK code generation
+  sdk-forge-codegen/              # Wasm component code generation (WIT + Rust)
     src/
       lib.rs                      # Re-exports
-      emitter.rs                  # Crate generation orchestrator
-      types.rs                    # Struct generation from schemas
-      client.rs                   # HTTP client wrapper generation
-      methods.rs                  # Per-endpoint method generation
-      errors.rs                   # Error enum generation
-      auth.rs                     # Auth module generation
-      cargo_toml.rs               # Cargo.toml generation
+      emitter.rs                  # Wasm component crate generation orchestrator
+      types.rs                    # WIT IR types (WitRecord, WitFunction, WitInterface)
+      client.rs                   # Component context generation
+      methods.rs                  # Per-endpoint function metadata
+      errors.rs                   # Error context generation
+      auth.rs                     # Auth config record generation
+      cargo_toml.rs               # Cargo.toml generation (cdylib + wit-bindgen)
+      naming.rs                   # WIT/Rust naming conventions (kebab-case, etc.)
+      openapi.rs                  # Optional OpenAPI export
       formatter.rs                # rustfmt integration
       error.rs                    # Codegen error types
 

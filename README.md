@@ -4,9 +4,9 @@
 <a href="https://github.com/ogghead/sdk-forge"><img src="https://img.shields.io/badge/rust-1.93%2B-orange.svg?logo=rust" alt="MSRV 1.93+" /></a>
 <a href="https://github.com/ogghead/sdk-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
 
-Record browser interactions, reverse-engineer APIs via Claude, and generate typed Rust SDKs.
+Record browser interactions, reverse-engineer APIs via Claude, and generate portable Wasm component SDKs.
 
-SDK Forge watches you use a website, captures the HTTP traffic, uses Claude to figure out the API, and spits out a working Rust crate with typed request/response structs, async endpoint methods, and auth handling baked in.
+SDK Forge watches you use a website, captures the HTTP traffic, uses Claude to figure out the API, and generates a WIT spec plus a Rust Wasm component implementation with typed request/response records, endpoint functions, and auth handling — all built on standard WASI HTTP interfaces.
 
 ## Usage
 
@@ -56,12 +56,12 @@ Turn the analyzed session into a complete Rust crate:
 sdk-forge generate session.sdkforge -o my-sdk
 ```
 
-This creates a ready-to-use crate with:
+This creates a Wasm component crate with:
 
-- Typed structs for every request and response body
-- Async methods for each discovered endpoint
-- Auth handling (Bearer, API key, cookie, or basic auth)
-- [`rquest`](https://github.com/penumbra-zone/rquest) as the HTTP client (TLS fingerprinting, browser impersonation)
+- A WIT spec defining typed records and interface functions for every endpoint
+- A Rust implementation (`cdylib`) that satisfies the WIT world
+- Auth handling (Bearer, API key, cookie, or basic auth) as WIT config records
+- WASI HTTP (`wasi:http/outgoing-handler@0.2.8`) for portable networking
 
 Options:
 
@@ -70,8 +70,8 @@ sdk-forge generate <SESSION> [-o <dir>] [-n <name>] [--check]
 
   <SESSION>       Path to an analyzed .sdkforge file
   -o, --output    Output directory (default: output/)
-  -n, --name      Crate name (default: derived from target URL)
-  --check         Run cargo check on the generated crate
+  -n, --name      Component crate name (default: derived from target URL)
+  --check         Run cargo component check on the generated crate (requires cargo-component)
 ```
 
 ### 4. Inspect a session
@@ -100,46 +100,45 @@ sdk-forge record https://jsonplaceholder.typicode.com
 # Claude analyzes the traffic and builds an API model
 sdk-forge analyze recording.sdkforge
 
-# Generate a typed Rust SDK
+# Generate a Wasm component SDK
 sdk-forge generate recording.sdkforge -n jsonplaceholder-sdk -o .
 
-# Use it
+# Use it (requires cargo-component)
 cd jsonplaceholder-sdk
-cargo check
+cargo component check
 ```
 
-The generated crate looks like this:
+The generated component crate looks like this:
 
 ```
 jsonplaceholder-sdk/
-  Cargo.toml          # rquest, serde, tokio, thiserror
+  Cargo.toml          # wit-bindgen, serde, serde_json (cdylib)
+  wit/
+    world.wit         # WIT spec: records, interfaces, world definition
   src/
-    lib.rs            # Module declarations
-    types.rs          # pub struct Post { id: i64, title: String, ... }
-    client.rs         # ApiClient, AuthStrategy trait, BearerAuth, etc.
-    endpoints.rs      # impl ApiClient { async fn list_posts(...) -> ... }
-    error.rs          # ApiError enum
+    lib.rs            # wit_bindgen::generate!(), component impl
+    types.rs          # Serde structs matching WIT records
+    http.rs           # WASI HTTP helpers (outgoing-handler@0.2.8)
+    error.rs          # ApiError struct
 ```
 
-Using the generated SDK:
+The WIT spec defines typed interfaces:
 
-```rust
-use jsonplaceholder_sdk::{ApiClient, NoAuth};
+```wit
+package jsonplaceholder-sdk:api;
 
-#[tokio::main]
-async fn main() {
-    let client = ApiClient::new(NoAuth);
-    let posts = client.list_posts(None).await.unwrap();
-    println!("{posts:?}");
+record post { id: s64, title: string, body: string }
+
+interface posts {
+    list-posts: func() -> result<list<post>, api-error>;
+    get-post: func(id: s64) -> result<post, api-error>;
+    create-post: func(body: create-post-request) -> result<post, api-error>;
 }
-```
 
-For APIs that require auth:
-
-```rust
-use jsonplaceholder_sdk::{ApiClient, BearerAuth};
-
-let client = ApiClient::new(BearerAuth::new("sk-..."));
+world sdk {
+    import wasi:http/outgoing-handler@0.2.8;
+    export posts;
+}
 ```
 
 ## Install
@@ -158,13 +157,13 @@ cargo build --release
 ## How it works
 
 ```
-Browser ──capture──► .sdkforge file ──Claude──► API model ──codegen──► Rust crate
-         (HAR-like)                  (analyze)  (JSON)      (Tera)     (src/*.rs)
+Browser ──capture──► .sdkforge file ──Claude──► API model ──codegen──► Wasm component
+         (HAR-like)                  (analyze)  (JSON)      (Tera)     (WIT + Rust)
 ```
 
 1. **Record** — launches a Chromium browser via CDP, intercepts all network traffic, filters out static assets and analytics, saves raw HTTP exchanges
 2. **Analyze** — sends the captured exchanges to Claude, which classifies endpoints, infers JSON schemas, detects auth patterns (Bearer, API key, cookie, basic), and identifies pagination
-3. **Generate** — converts the API model into Rust IR types (`RustStruct`, `EndpointMethod`), renders Tera templates, formats with `rustfmt`, writes a complete crate to disk
+3. **Generate** — converts the API model into WIT IR types (`WitRecord`, `WitFunction`, `WitInterface`), renders Tera templates, formats with `rustfmt`, writes a complete Wasm component crate with WIT spec to disk
 
 ## Architecture
 
@@ -173,7 +172,7 @@ sdk-forge-cli           CLI entry point (clap)
   ├── sdk-forge-session   Shared types + .sdkforge file format
   ├── sdk-forge-recorder  Browser orchestration + traffic capture
   ├── sdk-forge-analyzer  Claude-powered API reverse engineering
-  └── sdk-forge-codegen   Rust SDK code generation (Tera templates)
+  └── sdk-forge-codegen   Wasm component code generation (WIT + Tera templates)
 ```
 
 ## Development
